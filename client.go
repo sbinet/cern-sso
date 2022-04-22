@@ -130,7 +130,7 @@ func (cli *Client) setCookies() error {
 			c.Path = ep.Path
 			c.Secure = ep.Scheme == "https"
 			if c.Expires.IsZero() {
-				c.Expires = time.Now().UTC().Add(8 * time.Hour)
+				c.Expires = time.Now().UTC().Add(12 * time.Hour)
 			}
 		}
 		cli.cs = append(cli.cs, cs...)
@@ -146,7 +146,7 @@ func (cli *Client) Valid() (time.Time, bool) {
 		if c.Name != "KEYCLOAK_SESSION" {
 			continue
 		}
-		if c.Expires.After(cut) {
+		if c.Expires.UTC().After(cut) {
 			return c.Expires, true
 		}
 	}
