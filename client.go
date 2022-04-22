@@ -130,7 +130,7 @@ func (cli *Client) setCookies() error {
 			c.Path = ep.Path
 			c.Secure = ep.Scheme == "https"
 			if c.Expires.IsZero() {
-				c.Expires = time.Now().UTC().Add(6 * time.Hour)
+				c.Expires = time.Now().UTC().Add(8 * time.Hour)
 			}
 		}
 		cli.cs = append(cli.cs, cs...)
