@@ -22,17 +22,15 @@ func (cli *Client) handleSAML(page io.Reader) error {
 	}
 
 	var (
-		f     func(n *html.Node)
+		parse func(n *html.Node)
 		post  *html.Node
-		saml  *html.Node
-		relay *html.Node
 	)
 	doc, err := html.Parse(bytes.NewReader(raw))
 	if err != nil {
 		return fmt.Errorf("could not parse page: %w", err)
 	}
 
-	f = func(n *html.Node) {
+	parse = func(n *html.Node) {
 		if n.Type == html.ElementNode && n.Data == "form" {
 			for _, attr := range n.Attr {
 				if attr.Key == "name" && attr.Val == "saml-post-binding" {
@@ -41,16 +39,20 @@ func (cli *Client) handleSAML(page io.Reader) error {
 			}
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			f(c)
+			parse(c)
 		}
 	}
 
-	f(doc)
+	parse(doc)
 	if post == nil {
 		return fmt.Errorf("could not find SAML post form")
 	}
 
-	f = func(n *html.Node) {
+	var (
+		saml  *html.Node
+		relay *html.Node
+	)
+	parse = func(n *html.Node) {
 		if n.Type == html.ElementNode && n.Data == "input" {
 			for _, attr := range n.Attr {
 				if attr.Key == "name" && attr.Val == "SAMLResponse" {
@@ -62,10 +64,10 @@ func (cli *Client) handleSAML(page io.Reader) error {
 			}
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			f(c)
+			parse(c)
 		}
 	}
-	f(post)
+	parse(post)
 	if saml == nil {
 		return fmt.Errorf("could not find SAML input form")
 	}
