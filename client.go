@@ -11,7 +11,8 @@ import (
 	"net/url"
 	"time"
 
-	krb5 "github.com/jcmturner/gokrb5/v8/client"
+	krb5cli "github.com/jcmturner/gokrb5/v8/client"
+	krb5spn "github.com/jcmturner/gokrb5/v8/spnego"
 )
 
 const (
@@ -51,7 +52,7 @@ func WithLogger(msg *log.Logger) Option {
 
 // WithKrb5 configures the authentication to user the provided
 // kerberos5 client.
-func WithKrb5(cli *krb5.Client) Option {
+func WithKrb5(cli *krb5cli.Client) Option {
 	return func(o *Client) error {
 		o.krb5 = cli
 		return nil
@@ -63,7 +64,8 @@ type Client struct {
 	root string // login server
 	srv  string // auth server
 	http *http.Client
-	krb5 *krb5.Client
+	krb5 *krb5cli.Client
+	spn  *krb5spn.Client // SPNEGO client
 	cs   []*http.Cookie
 
 	msg   *log.Logger
@@ -101,6 +103,7 @@ func newClient(root string, opts []Option) (*Client, error) {
 		cli.krb5 = k
 	}
 
+	cli.spn = krb5spn.NewClient(cli.krb5, cli.http, "")
 	return cli, nil
 }
 
@@ -141,16 +144,20 @@ func (cli *Client) setCookies() error {
 
 // Valid returns whether the Keycloak cookie is valid, and its expiration date.
 func (cli *Client) Valid() (time.Time, bool) {
-	cut := time.Now().UTC().Add(cli.delta)
+	var (
+		exp time.Time
+		cut = time.Now().UTC().Add(cli.delta)
+	)
 	for _, c := range cli.cs {
 		if c.Name != "KEYCLOAK_SESSION" {
 			continue
 		}
-		if c.Expires.UTC().After(cut) {
-			return c.Expires, true
+		exp = c.Expires.UTC()
+		if exp.After(cut) {
+			return exp, true
 		}
 	}
-	return time.Time{}, false
+	return exp, false
 }
 
 func (cli *Client) Cookies() []*http.Cookie {

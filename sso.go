@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/jcmturner/gokrb5/v8/spnego"
 	"golang.org/x/net/html"
 )
 
@@ -39,7 +38,7 @@ func (cli *Client) Login() error {
 	req.Header.Set("User-Agent", "Go/1.x")
 	req.Header.Set("Accept", "*/*")
 
-	resp, err := cli.http.Do(req)
+	resp, err := cli.spn.Do(req)
 	if err != nil {
 		return fmt.Errorf("sso: could not send GET request to %q: %w", cli.root, err)
 	}
@@ -55,12 +54,7 @@ func (cli *Client) Login() error {
 		return fmt.Errorf("sso: could not create GET krb5-auth request: %w", err)
 	}
 
-	err = spnego.SetSPNEGOHeader(cli.krb5, req, "")
-	if err != nil {
-		return fmt.Errorf("sso: could not add SPNEGO header to krb5-auth request: %w", err)
-	}
-
-	resp, err = cli.http.Do(req)
+	resp, err = cli.spn.Do(req)
 	if err != nil {
 		return fmt.Errorf("sso: could not send GET krb5-auth request: %w", err)
 	}
@@ -70,14 +64,16 @@ func (cli *Client) Login() error {
 		return fmt.Errorf("sso: could not login (status=%s (%d))", resp.Status, resp.StatusCode)
 	}
 
-	switch resp.Request.URL.Host {
-	case "keystone.cern.ch":
-		err = cli.handleKeystone(resp.Request.URL)
-	default:
-		err = cli.handleSAML(resp.Body)
-	}
+	page, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("sso: could not read login response: %w", err)
+		return fmt.Errorf("sso: could not read krb5-auth page: %w", err)
+	}
+
+	if bytes.Contains(page, []byte(`form name="saml-post-binding"`)) {
+		err = cli.handleSAML(page)
+		if err != nil {
+			return fmt.Errorf("sso: could not read login response: %w", err)
+		}
 	}
 
 	err = cli.setCookies()

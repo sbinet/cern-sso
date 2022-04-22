@@ -7,7 +7,6 @@ package sso
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,17 +14,12 @@ import (
 	"golang.org/x/net/html"
 )
 
-func (cli *Client) handleSAML(page io.Reader) error {
-	raw, err := io.ReadAll(page)
-	if err != nil {
-		return fmt.Errorf("sso: could not read SAML HTML page: %w", err)
-	}
-
+func (cli *Client) handleSAML(page []byte) error {
 	var (
 		parse func(n *html.Node)
 		post  *html.Node
 	)
-	doc, err := html.Parse(bytes.NewReader(raw))
+	doc, err := html.Parse(bytes.NewReader(page))
 	if err != nil {
 		return fmt.Errorf("could not parse page: %w", err)
 	}
@@ -107,7 +101,7 @@ func (cli *Client) handleSAML(page io.Reader) error {
 	}
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := cli.http.Do(req)
+	resp, err := cli.spn.Do(req)
 	if err != nil {
 		return fmt.Errorf("could not send SAML request: %w", err)
 	}
