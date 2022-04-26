@@ -59,6 +59,15 @@ func WithKrb5(cli *krb5cli.Client) Option {
 	}
 }
 
+// WithCookieExpiration configures the default expiration for
+// the SSO cookie.
+func WithCookieExpiration(exp time.Duration) Option {
+	return func(o *Client) error {
+		o.exp = exp
+		return nil
+	}
+}
+
 // Client is a Single Sign-On client.
 type Client struct {
 	root string // login server
@@ -70,6 +79,7 @@ type Client struct {
 
 	msg   *log.Logger
 	delta time.Duration // minimum validity time left for cookie
+	exp   time.Duration // default expiration date for cookie
 }
 
 // NewClient creates a new SSO client that will authenticate with the
@@ -85,8 +95,9 @@ func newClient(root string, opts []Option) (*Client, error) {
 		root:  root,
 		srv:   DefaultAuthServer,
 		http:  httpClient(),
-		delta: 10 * time.Minute,
 		msg:   log.Default(),
+		delta: 10 * time.Minute,
+		exp:   6 * time.Hour,
 	}
 	for _, o := range opts {
 		err := o(cli)
@@ -133,7 +144,7 @@ func (cli *Client) setCookies() error {
 			c.Path = ep.Path
 			c.Secure = ep.Scheme == "https"
 			if c.Expires.IsZero() {
-				c.Expires = time.Now().UTC().Add(12 * time.Hour)
+				c.Expires = time.Now().UTC().Add(cli.exp)
 			}
 		}
 		cli.cs = append(cli.cs, cs...)
