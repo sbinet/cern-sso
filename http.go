@@ -9,10 +9,15 @@ import (
 	"net/http/cookiejar"
 	"time"
 
+	"github.com/sbinet/cern-sso/cert"
 	"golang.org/x/net/publicsuffix"
 )
 
 func httpClient() *http.Client {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.TLSClientConfig.RootCAs = cert.CERNRootCertPool()
+	t.TLSClientConfig.RootCAs.AppendCertsFromPEM(cert.GridPEM())
+
 	jar, err := cookiejar.New(&cookiejar.Options{
 		PublicSuffixList: publicsuffix.List,
 	})

@@ -31,6 +31,7 @@ import (
 	"time"
 
 	sso "github.com/sbinet/cern-sso"
+	"github.com/sbinet/cern-sso/cert"
 	"github.com/sbinet/mozcookie"
 	"golang.org/x/net/publicsuffix"
 )
@@ -104,7 +105,9 @@ func xmain(oname, login, auth string, insecure bool) error {
 
 func newClient(insecure bool) (*http.Client, error) {
 	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.TLSClientConfig.InsecureSkipVerify = insecure // FIXME(sbinet): use CERN Root-CA?
+	t.TLSClientConfig.RootCAs = cert.CERNRootCertPool()
+	t.TLSClientConfig.RootCAs.AppendCertsFromPEM(cert.GridPEM())
+	t.TLSClientConfig.InsecureSkipVerify = insecure
 
 	jar, err := cookiejar.New(&cookiejar.Options{
 		PublicSuffixList: publicsuffix.List,
