@@ -154,9 +154,12 @@ func (cli *Client) setCookies() error {
 }
 
 // Valid returns whether the Keycloak cookie is valid, and its expiration date.
-func (cli *Client) Valid() (time.Time, bool) {
+func (cli *Client) Valid() (exp time.Time, ok bool) {
+	if cli == nil {
+		return exp, false
+	}
+
 	var (
-		exp time.Time
 		cut = time.Now().UTC().Add(cli.delta)
 	)
 	for _, c := range cli.cs {
