@@ -6,10 +6,16 @@ package sso // import "github.com/sbinet/cern-sso"
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/url"
+	"time"
 
+	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/chromedp"
 	"golang.org/x/net/html"
 )
 
@@ -31,6 +37,57 @@ func Login(url string, opts ...Option) (*Client, error) {
 
 // Login attempts to login with the client login page.
 func (cli *Client) Login() error {
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("auth-server-allowlist", "auth.cern.ch,login.cern.ch"),
+		chromedp.UserAgent(`Go/1.x`),
+	)
+	var ctx = context.Background()
+	ctx, cancel1 := chromedp.NewExecAllocator(ctx, opts...)
+	defer cancel1()
+
+	ctx, cancel2 := chromedp.NewContext(ctx, chromedp.WithLogf(cli.msg.Printf))
+	//ctx, cancel2 := chromedp.NewContext(ctx, chromedp.WithDebugf(cli.msg.Printf))
+	defer cancel2()
+
+	err := chromedp.Run(ctx,
+		chromedp.Navigate(cli.root),
+		chromedp.Click(`a[id="social-kerberos"]`, chromedp.ByQuery),
+		waitVisible(5*time.Second, `h1`, chromedp.ByQuery),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			cookies, err := network.GetCookies().Do(ctx)
+			if err != nil {
+				return fmt.Errorf("sso: could not retrieve cookies: %w", err)
+			}
+			cli.cs = cli.cs[:0]
+			for _, p := range []string{
+				cli.root,
+				"https://" + cli.srv + "/auth/realms/cern/",
+				"https://" + cli.srv + "/auth/realms/kerberos/",
+			} {
+				ep, err := url.Parse(p)
+				if err != nil {
+					return fmt.Errorf("sso: could not parse url %q: %w", p, err)
+				}
+				var cs []*http.Cookie
+				for _, c := range cookies {
+					o := cookieFrom(*c, cli.exp)
+					cs = append(cs, o)
+				}
+				cli.http.Jar.SetCookies(ep, cs)
+				cli.cs = cs
+			}
+
+			return nil
+		}),
+	)
+	if err != nil {
+		return fmt.Errorf("could not authenticate with %q: %w", cli.root, err)
+	}
+
+	if true {
+		return nil
+	}
+
 	req, err := http.NewRequest(http.MethodGet, cli.root, nil)
 	if err != nil {
 		return fmt.Errorf("sso: could not create GET request to %q: %w", cli.root, err)
@@ -130,4 +187,50 @@ func extractKrb5URL(srv string, r io.Reader) (string, error) {
 	}
 
 	return "https://" + srv + href, nil
+}
+
+func cookieFrom(c network.Cookie, exp time.Duration) *http.Cookie {
+	var samesite http.SameSite
+	switch c.SameSite {
+	case network.CookieSameSiteStrict:
+		samesite = http.SameSiteStrictMode
+	case network.CookieSameSiteLax:
+		samesite = http.SameSiteLaxMode
+	case network.CookieSameSiteNone:
+		samesite = http.SameSiteNoneMode
+	default:
+		samesite = http.SameSiteDefaultMode
+	}
+
+	var expires time.Time
+	switch {
+	case c.Expires == 0:
+		expires = time.Now().UTC().Add(exp)
+	default:
+		expires = time.Unix(int64(c.Expires), 0).UTC()
+	}
+
+	return &http.Cookie{
+		Name:     c.Name,
+		Value:    c.Value,
+		Path:     c.Path,
+		Domain:   c.Domain,
+		Expires:  expires,
+		Secure:   c.Secure,
+		HttpOnly: c.HTTPOnly,
+		SameSite: samesite,
+	}
+}
+
+func waitVisible(timeout time.Duration, sel string, opts ...chromedp.QueryOption) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		sub, done := context.WithTimeout(ctx, timeout)
+		defer done()
+
+		err := chromedp.WaitVisible(sel, opts...).Do(sub)
+		if err != nil {
+			log.Printf("wait-visible %q timed out: %+v", sel, err)
+		}
+		return err
+	})
 }
