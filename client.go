@@ -114,7 +114,7 @@ func newClient(root string, opts []Option) (*Client, error) {
 		cli.krb5 = k
 	}
 
-	cli.spn = krb5spn.NewClient(cli.krb5, cli.http, "")
+	cli.spn = krb5spn.NewClient(cli.krb5, cli.http, "HTTP/"+cli.srv)
 	return cli, nil
 }
 
