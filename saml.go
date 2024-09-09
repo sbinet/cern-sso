@@ -100,6 +100,7 @@ func (cli *Client) handleSAML(page []byte) error {
 		return fmt.Errorf("could not create SAML request to %q: %w", action, err)
 	}
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", ssoUserAgent)
 
 	resp, err := cli.spn.Do(req)
 	if err != nil {

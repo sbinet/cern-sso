@@ -13,6 +13,10 @@ import (
 	"golang.org/x/net/html"
 )
 
+const (
+	ssoUserAgent = "Go/1.x"
+)
+
 // Login simulates a browser session to log in with the provided URL, using
 // the SPNEGO protocol.
 func Login(url string, opts ...Option) (*Client, error) {
@@ -35,7 +39,7 @@ func (cli *Client) Login() error {
 	if err != nil {
 		return fmt.Errorf("sso: could not create GET request to %q: %w", cli.root, err)
 	}
-	req.Header.Set("User-Agent", "Go/1.x")
+	req.Header.Set("User-Agent", ssoUserAgent)
 	req.Header.Set("Accept", "*/*")
 
 	resp, err := cli.spn.Do(req)
@@ -53,6 +57,7 @@ func (cli *Client) Login() error {
 	if err != nil {
 		return fmt.Errorf("sso: could not create GET krb5-auth request: %w", err)
 	}
+	req.Header.Set("User-Agent", ssoUserAgent)
 
 	resp, err = cli.spn.Do(req)
 	if err != nil {
